@@ -1,7 +1,48 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+
 
 void main() {
   runApp(const DemoApplication());
+}
+
+class DataValue {
+  final DateTime date;
+  final double height;
+
+  DataValue({required this.date, required this.height});
+}
+
+class Data {
+  
+  final String tideGauge;
+  final List<DataValue> astronomical;
+  final List<DataValue> readings;
+
+  Data({required this.tideGauge, required this.astronomical, required this.readings});
+
+  factory Data.fromJson(Map<String, dynamic> json) {
+    List<DataValue> astronomical = [];
+    List<DataValue> readings = [];
+
+    for (var item in json['astronomica']) {
+      astronomical.add(DataValue(date: DateTime.parse(item['fecha']), height: item['altura']));
+    }
+
+    for (var item in json['lecturas']) {
+      readings.add(DataValue(date: DateTime.parse(item['fecha']), height: item['altura']));
+    }
+
+    return Data(
+      tideGauge: json['mareografo'],
+      astronomical: astronomical,
+      readings: readings,
+    );
+  }
 }
 
 class DemoApplication extends StatelessWidget {
@@ -55,17 +96,31 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _counter = 0;
+  
+  Data? futureData;
+  
+  Future<http.Response> fetchData() {
+    return http.get(Uri.parse('https://www.hidro.gov.ar/api/v1/AlturasHorarias/ValoresGrafico/SFER/202404150857'));
+  }
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  void _incrementCounter() async {
+    final response = await fetchData();
+    if (response.statusCode == 200) {
+      // If the server returns an OK response, then parse the JSON.
+      final data = Data.fromJson(jsonDecode(response.body));
+      setState(() {
+        // This call to setState tells the Flutter framework that something has
+        // changed in this State, which causes it to rerun the build method below
+        // so that the display can reflect the updated values. If we changed
+        // _counter without calling setState(), then the build method would not be
+        // called again, and so nothing would appear to happen.
+        futureData = data;
+      });  
+    } else {
+      // If the server returns an error response, then throw an exception.
+      throw Exception('Failed to load data');
+    }
+    
   }
 
   @override
@@ -109,7 +164,7 @@ class _HomePageState extends State<HomePage> {
               'Please push the button many times as you want:',
             ),
             Text(
-              '$_counter',
+              futureData?.readings.map((e) => '${DateFormat('yyyy-MM-dd kk:mm').format(e.date)}: ${e.height}m').join('\n') ?? 'No data',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
           ],
